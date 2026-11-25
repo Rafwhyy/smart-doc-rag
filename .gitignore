@@ -1,0 +1,40 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment Variables & Secrets
+.env
+.env.local
+*.env
+!.env.example
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Chroma Vector Database & Cache
+chroma/
+.chroma/
+chroma_data/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Dokumen PDF Uji Coba (Opsional: abaikan file pdf agar repo tetap ringan)
+sample_docs/*.pdf
+!sample_docs/.gitkeep
