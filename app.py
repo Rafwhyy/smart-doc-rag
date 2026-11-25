@@ -15,8 +15,13 @@ from langchain_community.vectorstores import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 
-# Muat environment variables dari file .env
+# Muat environment variables dari file .env (lokal) & st.secrets (Streamlit Cloud)
 load_dotenv()
+try:
+    if "GOOGLE_API_KEY" in st.secrets and not os.getenv("GOOGLE_API_KEY"):
+        os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+except Exception:
+    pass
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(page_title="Smart Doc RAG Assistant", page_icon="📄", layout="wide")
