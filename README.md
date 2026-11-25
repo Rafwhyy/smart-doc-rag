@@ -1,17 +1,56 @@
-# 📄 Smart Document Q&A Assistant (RAG Pipeline)
+# 📄 Smart Document Q&A (RAG Pipeline)
 
-Aplikasi asisten berbasis AI yang memungkinkan Anda mengunggah dokumen PDF dan mengajukan pertanyaan spesifik secara interaktif. Dibangun menggunakan arsitektur **Retrieval-Augmented Generation (RAG)** modern dengan **LangChain**, model embedding lokal **HuggingFace**, database vektor **ChromaDB**, model bahasa **Google Gemini**, dan antarmuka web interaktif **Streamlit**.
+Asisten tanya jawab dokumen berbasis **Retrieval-Augmented Generation (RAG)** yang dibangun menggunakan **Python**, **LangChain**, **ChromaDB**, **HuggingFace Embeddings**, **Google Gemini API**, dan **Streamlit**. 
+
+Aplikasi ini memungkinkan pengguna mengunggah dokumen PDF (seperti SOP teknis, jurnal penelitian, atau dokumentasi sistem) dan mengajukan pertanyaan spesifik dalam bahasa natural. Setiap jawaban dihasilkan secara ketat berdasarkan isi dokumen dan dilengkapi dengan **kutipan sumber beserta nomor halaman** (*Source Citation*) untuk mencegah halusinasi AI.
+
+---
+
+## 🎯 Latar Belakang & Solusi
+
+Large Language Model (LLM) standar memiliki dua keterbatasan utama saat digunakan untuk kebutuhan dokumen privat:
+1. **Tidak memiliki akses ke data spesifik/internal** yang tidak ada di data latih publiknya.
+2. **Rentan berhalusinasi** (mengarang jawaban yang terdengar meyakinkan ketika informasi tidak ditemukan).
+
+Proyek ini menyelesaikan masalah tersebut dengan menerapkan arsitektur **RAG** yang menggabungkan pencarian semantik berbasis vektor (*Vector Similarity Search*) dengan *Guardrail Prompting* sehingga model hanya menjawab berdasarkan fakta yang tertulis di dokumen.
 
 ---
 
 ## ✨ Fitur Utama
 
-- **📄 Ekstraksi & Chunking PDF Cerdas**: Dokumen PDF diurai menggunakan `PyPDFLoader` dan dipotong menjadi segmen-segmen semantik menggunakan `RecursiveCharacterTextSplitter` (chunk size: 1000, overlap: 200).
-- **🧠 Embedding Lokal Cepat & Hemat**: Menggunakan model `sentence-transformers/all-MiniLM-L6-v2` via HuggingFace yang berjalan secara lokal (bebas kuota token embedding dan mendukung cache offline).
-- **⚡ Chroma Vector Database**: Menyimpan dan mencari potongan dokumen yang paling relevan (*Top-K similarity retrieval*) secara cepat.
-- **🤖 Google Gemini dengan Auto-Fallback**: Terintegrasi dengan model generasi teks Google Gemini (`gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite`) dengan mekanisme otomatis beralih model jika server sedang padat (mengantisipasi *error 503*).
-- **🛡️ Anti-Halusinasi & Sitasi Akurat**: Menggunakan *system prompt* terarah agar jawaban hanya berasal dari isi dokumen asli. Dilengkapi panel referensi yang menampilkan potongan teks asli beserta nomor halaman dokumen.
-- **💻 Antarmuka Interaktif Streamlit**: Tampilan UI yang bersih, responsif, dan mudah digunakan langsung dari peramban web (*browser*).
+- **Dynamic PDF Ingestion & Chunking:** Mengekstrak teks per halaman menggunakan `PyPDFLoader` dan memecahnya secara cerdas menggunakan `RecursiveCharacterTextSplitter` (`chunk_size=1000`, `chunk_overlap=200`) agar konteks antar-kalimat tetap utuh.
+- **Local Embedding Model with Disk Caching:** Menggunakan model `sentence-transformers/all-MiniLM-L6-v2` secara lokal dengan mekanisme `@st.cache_resource` dan `local_files_only=True` sehingga proses *embedding* berjalan cepat, gratis, dan tanpa batas kuota API.
+- **In-Memory Vector Search (ChromaDB):** Menyimpan indeks vektor di dalam `st.session_state` untuk pengambilan konteks paling relevan (*Top-K = 3*) secara instan selama sesi tanya jawab berlangsung.
+- **Multi-Model Auto-Fallback:** Dilengkapi mekanisme *fallback* berantai pada pemanggilan LLM (`gemini-3.8-flash` → `gemini-3.6-flash` → `gemini-3.5-flash-lite`) dengan batas waktu (*timeout*) terkontrol untuk menjaga ketersediaan layanan saat server mengalami lonjakan trafik (`503 UNAVAILABLE`).
+- **Anti-Hallucination Guardrail Prompt:** Instruksi sistem ketat yang memaksa LLM menolak menjawab secara jujur apabila informasi yang ditanyakan tidak tersedia di dalam dokumen.
+- **Transparent Source Citation:** Menyediakan panel *expander* interaktif yang menampilkan potongan teks asli (*chunks*) dan nomor halaman rujukan yang digunakan AI untuk menyusun jawaban.
+- **Windows TLS/SSL Resilience:** Konfigurasi eksplisit `certifi` untuk memastikan validasi sertifikat TLS pada klien HTTP berjalan stabil di lingkungan Windows.
+
+---
+
+## 🏗️ Arsitektur Sistem
+
+### 1. Alur Utama (Code-First Pipeline: Streamlit + LangChain)
+
+```mermaid
+%%{init: {'flowchart': {'curve': 'linear'}}}%%
+flowchart LR
+    A[Upload File PDF] --> B[PyPDFLoader]
+    B --> C[RecursiveCharacterTextSplitter]
+    C --> D[HuggingFace Embeddings]
+    D --> E[(ChromaDB Vector Store)]
+    F[Pertanyaan User] --> G[Retriever Top-K = 3]
+    E --> G
+    G --> H[Guardrail Prompt Template]
+    F --> H
+    H --> I[Gemini LLM Auto-Fallback]
+    I --> J[Jawaban + Referensi Halaman]
+```
+
+**Tahapan Kerja Pipeline:**
+1. **Indexing Phase:** Dokumen PDF yang diunggah dibaca per halaman, dipecah menjadi potongan teks (*chunks*), dikonversi menjadi vektor numerik berdimensi 384 menggunakan `all-MiniLM-L6-v2`, lalu disimpan ke dalam **ChromaDB**.
+2. **Retrieval Phase:** Pertanyaan pengguna dikonversi menjadi vektor dan dicocokkan dengan indeks di ChromaDB untuk mengambil 3 potongan teks paling relevan (`k=3`).
+3. **Augmented Generation Phase:** Potongan teks relevan digabungkan ke dalam *prompt template* anti-halusinasi bersama pertanyaan pengguna, lalu dikirim ke model Google Gemini untuk menghasilkan jawaban faktual yang dilengkapi dengan kutipan referensi dan nomor halaman.
 
 ---
 
@@ -31,25 +70,13 @@ smart-doc-rag/
 
 ---
 
-## 🔄 Alur Kerja Pipeline (RAG)
-
-1. **Unggah Dokumen**: Pengguna mengunggah berkas PDF melalui panel sidebar.
-2. **Text Splitting**: Dokumen diekstrak dan dipecah menjadi potongan-potongan teks (*chunks*) berukuran 1000 karakter dengan tumpang tindih (*overlap*) 200 karakter.
-3. **Vektorisasi**: Setiap potongan teks dikonversi menjadi representasi vektor numerik menggunakan `all-MiniLM-L6-v2`.
-4. **Indeksasi Chroma**: Vektor disimpan ke dalam *Vector Store* Chroma untuk pencarian instan.
-5. **Pertanyaan Pengguna**: Saat pengguna mengajukan pertanyaan, sistem mencari 3 potongan teks paling relevan (*Top-3 retrieval*).
-6. **Sintesis Konteks & LLM**: Konteks yang relevan digabungkan ke dalam *prompt anti-halusinasi* dan diteruskan ke Google Gemini untuk menghasilkan jawaban faktual dengan referensi halaman.
-
----
-
 ## 🚀 Panduan Memulai
 
 ### 1. Prasyarat Sistem
 - **Python 3.10** atau versi lebih baru
-- Koneksi internet (untuk mengunduh paket dan mengakses API Google Gemini)
-- API Key Google Gemini (gratis di [Google AI Studio](https://aistudio.google.com/app/apikey))
+- API Key Google Gemini (dapatkan gratis di [Google AI Studio](https://aistudio.google.com/app/apikey))
 
-### 2. Kloning Repository (atau Navigasi ke Folder Proyek)
+### 2. Kloning Repository
 ```bash
 git clone https://github.com/<username-anda>/smart-doc-rag.git
 cd smart-doc-rag
@@ -61,12 +88,7 @@ cd smart-doc-rag
   python -m venv venv
   .\venv\Scripts\Activate.ps1
   ```
-- **Windows (Command Prompt):**
-  ```cmd
-  python -m venv venv
-  .\venv\Scripts\activate.bat
-  ```
-- **macOS / Linux:**
+- **Linux / macOS:**
   ```bash
   python3 -m venv venv
   source venv/bin/activate
@@ -78,44 +100,43 @@ pip install -r requirements.txt
 ```
 
 ### 5. Konfigurasi Environment Variables
-Salin berkas `.env.example` menjadi `.env`:
+Salin file `.env.example` menjadi `.env`:
 - **Windows (PowerShell):**
   ```powershell
   Copy-Item .env.example .env
   ```
-- **Linux/macOS:**
+- **Linux / macOS:**
   ```bash
   cp .env.example .env
   ```
 
-Buka berkas `.env` lalu masukkan API Key Google Gemini Anda:
+Buka `.env` dan masukkan API Key Google Gemini Anda:
 ```env
 GOOGLE_API_KEY="AIzaSyYourSecretKeyHere..."
 ```
 
-### 6. Menjalankan Aplikasi
-Jalankan perintah berikut di terminal:
+### 6. Jalankan Aplikasi
 ```bash
 streamlit run app.py
 ```
-Aplikasi akan otomatis terbuka di browser pada alamat `http://localhost:8501`.
+Aplikasi akan terbuka otomatis di browser pada alamat `http://localhost:8501`.
 
 ---
 
-## 🛠️ Teknologi yang Digunakan
+## 🛠️ Ringkasan Teknologi
 
-| Komponen | Pustaka / Layanan | Kegunaan |
-| :--- | :--- | :--- |
-| **User Interface** | [Streamlit](https://streamlit.io/) | Dashboard & antarmuka tanya jawab interaktif |
-| **Framework RAG** | [LangChain](https://www.langchain.com/) | Orkestrasi alur dokumen, prompt, dan model |
-| **Document Loader** | `pypdf` via LangChain | Ekstraksi teks dari berkas PDF |
-| **Embedding Model** | [Sentence Transformers](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | Vektorisasi teks lokal (`all-MiniLM-L6-v2`) |
-| **Vector Store** | [ChromaDB](https://www.trychroma.com/) | Penyimpanan vektor & *similarity search* |
-| **LLM Provider** | [Google Generative AI](https://ai.google.dev/) | Inferensi jawaban dengan Gemini Flash |
-| **Security & Env** | `python-dotenv`, `certifi` | Pengelolaan API Key & sertifikat SSL Windows |
+| Komponen | Pustaka / Layanan |
+| :--- | :--- |
+| **Frontend UI** | Streamlit |
+| **Framework RAG** | LangChain (`langchain`, `langchain-community`, `langchain-google-genai`, `langchain-huggingface`) |
+| **PDF Parsing** | `pypdf` |
+| **Vector Database** | ChromaDB |
+| **Local Embeddings** | HuggingFace (`sentence-transformers/all-MiniLM-L6-v2`) |
+| **LLM Provider** | Google Generative AI (`gemini-3.8-flash`, `gemini-3.6-flash`, `gemini-3.5-flash-lite`) |
+| **TLS & Security** | `certifi`, `python-dotenv` |
 
 ---
 
 ## 🔒 Catatan Keamanan
-- Berkas `.env` telah dimasukkan ke dalam `.gitignore` sehingga API key Anda **tidak akan** terunggah secara publik ke GitHub.
-- Jangan pernah mempublikasikan file `.env` atau menyertakan API key langsung di dalam kode program.
+- Berkas `.env` telah didaftarkan dalam `.gitignore` sehingga tidak akan terunggah ke repositori publik.
+- Jangan pernah membagikan atau mengunggah API key pribadi Anda ke internet.
