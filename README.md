@@ -123,6 +123,39 @@ Aplikasi akan terbuka otomatis di browser pada alamat `http://localhost:8501`.
 
 ---
 
+## 🌐 Panduan Deployment ke Streamlit Community Cloud (Gratis)
+
+Aplikasi ini dapat di-deploy secara online dan gratis menggunakan **Streamlit Community Cloud** sehingga dapat diakses melalui URL publik dari perangkat mana saja:
+
+### 1. Masuk ke Streamlit Cloud
+1. Buka [share.streamlit.io](https://share.streamlit.io/).
+2. Masuk menggunakan akun GitHub Anda (**Continue with GitHub**).
+
+### 2. Buat Aplikasi Baru
+1. Klik tombol **"Create app"** (atau **"New app"**).
+2. Tentukan parameter berikut:
+   - **Repository:** `<username-anda>/smart-doc-rag`
+   - **Branch:** `main`
+   - **Main file path:** `app.py`
+   - **App URL:** *(Opsional)* Tentukan nama subdomain yang diinginkan.
+
+### 3. Konfigurasi Secrets (Format TOML)
+Karena berkas `.env` **wajib diabaikan** oleh Git demi keamanan agar kunci rahasia tidak bocor ke publik, API Key harus dimasukkan melalui menu **Secrets** di Streamlit Cloud:
+
+1. Klik menu **"Advanced settings..."** (atau buka menu **Settings** $\rightarrow$ **Secrets** jika aplikasi sudah dibuat).
+2. Masukkan konfigurasi dalam format **TOML** yang valid (*wajib diapit tanda petik dua*):
+   ```toml
+   GOOGLE_API_KEY = "your_google_gemini_api_key_here"
+   ```
+   > ⚠️ **Perhatian Format TOML:** Nilai API Key **wajib** diapit oleh tanda petik dua (`"..."`). Menuliskan nilai tanpa tanda petik akan menyebabkan error *Invalid TOML*.
+
+3. Klik **Save**, lalu klik **Deploy!**.
+
+### 4. Alternatif: Input API Key via Sidebar
+Jika Anda tidak ingin mengisi menu Secrets, aplikasi ini telah dilengkapi dengan pendeteksi otomatis di panel samping (**Sidebar**). Pengguna dapat langsung menempelkan API Key Gemini di kolom input pada sidebar saat aplikasi dibuka di peramban web.
+
+---
+
 ## 🛠️ Ringkasan Teknologi
 
 | Komponen | Pustaka / Layanan |
