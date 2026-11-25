@@ -17,11 +17,22 @@ from langchain_core.prompts import ChatPromptTemplate
 
 # Muat environment variables dari file .env (lokal) & st.secrets (Streamlit Cloud)
 load_dotenv()
-try:
-    if "GOOGLE_API_KEY" in st.secrets and not os.getenv("GOOGLE_API_KEY"):
-        os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
-except Exception:
-    pass
+
+def get_configured_api_key():
+    if os.getenv("GOOGLE_API_KEY"):
+        return os.getenv("GOOGLE_API_KEY")
+    if os.getenv("GEMINI_API_KEY"):
+        return os.getenv("GEMINI_API_KEY")
+    try:
+        if "GOOGLE_API_KEY" in st.secrets:
+            return str(st.secrets["GOOGLE_API_KEY"])
+        if "GEMINI_API_KEY" in st.secrets:
+            return str(st.secrets["GEMINI_API_KEY"])
+    except Exception:
+        pass
+    return None
+
+env_api_key = get_configured_api_key()
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(page_title="Smart Doc RAG Assistant", page_icon="📄", layout="wide")
@@ -70,9 +81,25 @@ def process_pdf(uploaded_file):
     return vectorstore, len(docs), len(splits)
 
 
-# Sidebar untuk Upload Dokumen
+# Sidebar untuk Konfigurasi & Upload Dokumen
 with st.sidebar:
-    st.header("1. Unggah Dokumen")
+    st.header("1. Konfigurasi API")
+    if env_api_key:
+        st.success("API Key terdeteksi ✓")
+        active_api_key = env_api_key
+    else:
+        st.warning("API Key belum diset.")
+        active_api_key = st.text_input(
+            "Masukkan Gemini API Key:",
+            type="password",
+            help="Dapatkan API Key di https://aistudio.google.com/app/apikey",
+            placeholder="AIzaSy...",
+        )
+        if not active_api_key:
+            st.caption("💡 Masukkan API key di atas atau simpan di menu Secrets Streamlit Cloud.")
+
+    st.divider()
+    st.header("2. Unggah Dokumen")
     uploaded_file = st.file_uploader("Pilih file PDF", type=["pdf"])
 
     if uploaded_file is not None:
@@ -123,6 +150,14 @@ if "vectorstore" in st.session_state:
                     context=context_text, input=user_question
                 )
 
+                # Validasi API Key sebelum memanggil LLM
+                if not active_api_key:
+                    st.error("⚠️ Google Gemini API Key belum dimasukkan. Silakan masukkan API Key di panel sebelah kiri.")
+                    st.stop()
+
+                # Set ke environment variable sebagai fallback
+                os.environ["GOOGLE_API_KEY"] = active_api_key
+
                 # 3. Panggil LLM dengan Auto-Fallback berantai jika salah satu server sibuk (503)
                 candidate_models = [
                     ("gemini-3.8-flash", {"thinking_level": "low"}),
@@ -138,6 +173,7 @@ if "vectorstore" in st.session_state:
                     try:
                         llm = ChatGoogleGenerativeAI(
                             model=model_name,
+                            google_api_key=active_api_key,
                             temperature=0.2,
                             timeout=20,
                             max_retries=1,
